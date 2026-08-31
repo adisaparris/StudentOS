@@ -150,6 +150,8 @@
   .popover.hidden{ display:none; }
   .brand-popover{ top:64px; left:22px; right:auto; width:250px; }
   #widget-settings-popover{ width:400px; max-height:70vh; overflow-y:auto; }
+  .urgency-settings-wrap{ position:relative; display:inline-flex; }
+  .urgency-popover{ position:absolute; top:calc(100% + 8px); right:0; left:auto; width:230px; }
   .popover h4{ margin:0 0 4px; font-family:var(--font-display); font-size:14.5px; }
   .popover p{ margin:0 0 12px; font-size:12px; color:var(--ink-soft); }
   .swatch-row{ display:flex; flex-wrap:wrap; gap:8px; margin-bottom:12px; }
@@ -292,6 +294,19 @@
   .mini-meta{ font-size:11.5px; color:var(--ink-soft); }
 
   .urgency-pill{ font-size:11px; font-weight:700; padding:4px 10px; border-radius:999px; white-space:nowrap; flex-shrink:0; }
+  .due-pill-group{ display:inline-flex; align-items:center; gap:6px; flex-shrink:0; flex-wrap:wrap;
+    justify-content:flex-end; }
+  .urgency-date{ background:var(--surface-soft); color:var(--ink-soft); border:1px solid var(--border); }
+  .urgency-glow-orange{ background:#FFEDD5; color:#C2410C; border:1px solid #FDBA74;
+    box-shadow:0 0 0 1px rgba(249,115,22,.25), 0 0 12px rgba(249,115,22,.45);
+    animation:urgencyPulse 2.4s ease-in-out infinite; }
+  .urgency-glow-red{ background:#FEE2E2; color:#DC2626; border:1px solid #FCA5A5;
+    box-shadow:0 0 0 1px rgba(220,38,38,.28), 0 0 12px rgba(220,38,38,.5);
+    animation:urgencyPulse 1.7s ease-in-out infinite; }
+  @keyframes urgencyPulse{ 0%,100%{ filter:brightness(1); } 50%{ filter:brightness(1.09); } }
+  @media (prefers-reduced-motion: reduce){
+    .urgency-glow-orange, .urgency-glow-red{ animation:none; }
+  }
   .urgency-overdue{ background:#FEE2E2; color:#DC2626; }
   .urgency-today{ background:#FEF3C7; color:#B45309; }
   .urgency-soon{ background:#FEF9C3; color:#A16207; }
@@ -532,6 +547,7 @@
     color:var(--ink-soft); transition:all .15s ease; }
   .tag-filter-btn:hover{ border-color:var(--accent); }
   .tag-filter-btn.active{ background:var(--accent); color:#fff; border-color:var(--accent); }
+  .tag-filter-note{ font-size:11px; font-weight:700; color:var(--ink-faint); align-self:center; margin-left:2px; }
   .assignment-group-head{ display:flex; align-items:center; gap:10px; font-family:var(--font-display);
     font-weight:700; font-size:19px; color:var(--ink); margin:26px 0 10px; padding:11px 16px;
     border-left:5px solid var(--accent); border-radius:0 10px 10px 0;
@@ -1227,6 +1243,21 @@
         <div class="toolbar-right">
           <button class="add-btn" id="week-toggle-btn">📅 This Week</button>
           <button class="add-btn" id="assignment-sort-btn" title="Group by class, then due date & time">⇅ Sort</button>
+          <div class="urgency-settings-wrap">
+            <button class="add-btn" id="urgency-settings-btn" title="Due date urgency highlighting">⚡ Urgency</button>
+            <div class="popover urgency-popover hidden" id="urgency-popover">
+              <div class="popover-section">
+                <h4>Due Date Urgency</h4>
+                <p>Glow when something is coming up soon.</p>
+                <label class="dark-mode-toggle-row" style="margin-bottom:12px;">
+                  <span>Highlight when due</span>
+                  <input type="checkbox" id="urgency-glow-toggle" checked>
+                </label>
+                <div class="ov-field"><label>Warn within (days)</label>
+                  <input type="number" id="urgency-days-input" class="field" min="0" max="30" value="3" style="width:100%;"></div>
+              </div>
+            </div>
+          </div>
           <select id="assignment-type-select" class="field">
             <option value="all">Assignments &amp; Exams</option>
             <option value="assignments">Assignments only</option>
@@ -2062,7 +2093,7 @@
 
   /* ============ state ============ */
   var state = { courses:[], assignments:[], exams:[], habits:[], events:[], textbooks:[], files:[], folders:[], moods:[], timerSessions:[], sharedSchedules:[], notesContent:'', notesTitle:'',
-    settings:{ accent:'#8B5CF6', bgColor:'#8B5CF6', gpa:null, profileName:'', profileSchool:'', profilePicture:'', brandIcon:'', brandImage:'', brandBg:'', weekStart:0, statsEnabled:null, moodEmojis:null, plannerTitle:'', darkMode:false, dashboardOrder:null, dashboardEnabled:null, dashboardSizes:null, sidebarCollapsed:false, tagColors:null, lastSeenVersion:'', countdownDate:'', countdownLabel:'' } };
+    settings:{ accent:'#8B5CF6', bgColor:'#8B5CF6', gpa:null, profileName:'', profileSchool:'', profilePicture:'', brandIcon:'', brandImage:'', brandBg:'', weekStart:0, statsEnabled:null, moodEmojis:null, plannerTitle:'', darkMode:false, dashboardOrder:null, dashboardEnabled:null, dashboardSizes:null, sidebarCollapsed:false, tagColors:null, urgencyGlow:true, urgencyDays:3, lastSeenVersion:'', countdownDate:'', countdownLabel:'' } };
   var assignmentFilter = 'all';
   var assignmentCourseFilter = null;
   var expandedCourseIds = {};
@@ -2075,7 +2106,7 @@
   var compareYear = null, compareMonth = null;
   var editingTextbookId = null;
   var addingSubForId = null;
-  var assignmentTagFilter = null;
+  var assignmentTagFilters = [];
   var assignmentSortByClass = false;
   var editingAssignmentId = null;
   var editingExamId = null;
@@ -2113,8 +2144,13 @@
   var ALLOWED_FILE_TYPES = ['application/pdf','image/png','image/jpeg','image/gif','image/webp','text/plain','application/msword','application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
   var ALLOWED_FILE_EXTENSIONS = ['.pdf','.png','.jpg','.jpeg','.gif','.webp','.txt','.doc','.docx'];
   var MAX_FILE_SIZE = 8 * 1024 * 1024;
-  var APP_VERSION = '1.10';
+  var APP_VERSION = '1.10.1';
   var CHANGELOG = [
+    { version:'1.10.1', date:'', notes:[
+      'Assignments and exams now use the same two-pill layout: the due date, then the countdown side by side.',
+      'Upcoming due dates can glow orange (then red as they get closer). Toggle it and set the warning window from the Urgency button in the Assignments tab — 3 days by default.',
+      'Tag filtering supports multiple tags at once, narrowing to items that carry all of them.'
+    ]},
     { version:'1.10', date:'', notes:[
       'Exams can now be checked off like assignments.',
       'Fixed: class chips at the top of the Assignments tab ignored exams, so a class with one assignment and one exam showed 0/1 instead of 0/2.',
@@ -2315,6 +2351,30 @@
     if(diff===1) return { text:'Due tomorrow', cls:'urgency-soon' };
     return { text:'Due ' + formatNice(dueDate), cls:'urgency-normal' };
   }
+  function urgencyDaysSetting(){
+    var n = parseInt(state.settings.urgencyDays, 10);
+    return (isNaN(n) || n < 0) ? 3 : Math.min(n, 30);
+  }
+  function urgencyGlowOn(){ return state.settings.urgencyGlow !== false; }
+  // One pill pair for both assignments and exams: the date, then the countdown.
+  function duePillsHtml(dateIso, timeStr, completed){
+    if(completed) return '<span class="urgency-pill urgency-done">Completed</span>';
+    if(!dateIso) return '<span class="urgency-pill urgency-normal">No date</span>';
+    var diff = daysBetween(dateIso);
+    var datePill = '<span class="urgency-pill urgency-date">Due ' + escapeHtml(formatNice(dateIso)) +
+      (timeStr ? ' · ' + escapeHtml(formatTime(timeStr)) : '') + '</span>';
+    var text, cls;
+    if(diff < 0){ text = Math.abs(diff) + (Math.abs(diff)===1?' day':' days') + ' overdue'; cls = 'urgency-overdue'; }
+    else if(diff === 0){ text = 'Today'; cls = 'urgency-today'; }
+    else if(diff === 1){ text = 'Tomorrow'; cls = 'urgency-soon'; }
+    else { text = 'In ' + diff + ' days'; cls = 'urgency-normal'; }
+    var glow = '';
+    if(urgencyGlowOn()){
+      if(diff < 0) glow = ' urgency-glow-red';
+      else if(diff <= urgencyDaysSetting()) glow = diff <= 1 ? ' urgency-glow-red' : ' urgency-glow-orange';
+    }
+    return datePill + '<span class="urgency-pill ' + cls + glow + '">' + text + '</span>';
+  }
 
   /* ============ course meeting days ============ */
   var DAY_NAME_MAP = {
@@ -2501,6 +2561,37 @@
       toggleSidebar();
     });
     applySidebarCollapsed();
+  }
+  function syncUrgencyControls(){
+    var g = document.getElementById('urgency-glow-toggle');
+    if(g) g.checked = urgencyGlowOn();
+    var d = document.getElementById('urgency-days-input');
+    if(d && document.activeElement!==d) d.value = urgencyDaysSetting();
+  }
+  function setupUrgencySettings(){
+    var btn = document.getElementById('urgency-settings-btn');
+    var pop = document.getElementById('urgency-popover');
+    btn.addEventListener('click', function(ev){
+      ev.stopPropagation();
+      syncUrgencyControls();
+      pop.classList.toggle('hidden');
+    });
+    document.addEventListener('click', function(ev){
+      if(!pop.contains(ev.target) && ev.target!==btn && !btn.contains(ev.target)) pop.classList.add('hidden');
+    });
+    document.getElementById('urgency-glow-toggle').addEventListener('change', function(ev){
+      state.settings.urgencyGlow = ev.target.checked;
+      saveKey('kenna-settings', state.settings);
+      renderAssignments(); renderDashboard();
+    });
+    document.getElementById('urgency-days-input').addEventListener('change', function(ev){
+      var v = parseInt(ev.target.value, 10);
+      state.settings.urgencyDays = (isNaN(v) || v < 0) ? 3 : Math.min(v, 30);
+      ev.target.value = state.settings.urgencyDays;
+      saveKey('kenna-settings', state.settings);
+      renderAssignments(); renderDashboard();
+    });
+    syncUrgencyControls();
   }
   function setupBrandPopover(){
     var badge = document.getElementById('brand-badge');
@@ -4145,8 +4236,14 @@
         '; border-color:' + tagColor(t) + '55;">' + escapeHtml(t) + '</span>';
     }).join('') + '</div>';
   }
+  // Tags are additive: selecting more than one narrows to items carrying all of them.
   function setAssignmentTagFilter(tag){
-    assignmentTagFilter = tag;
+    if(tag===null){ assignmentTagFilters = []; }
+    else {
+      var i = assignmentTagFilters.indexOf(tag);
+      if(i===-1) assignmentTagFilters.push(tag);
+      else assignmentTagFilters.splice(i, 1);
+    }
     renderAssignments();
   }
   function renderAssignmentTagFilters(){
@@ -4154,19 +4251,21 @@
     if(!row) return;
     var tags = allAssignmentTags();
     if(!tags.length){ row.innerHTML = ''; return; }
+    var activeCount = assignmentTagFilters.length;
     row.innerHTML = '<span class="tag-filter-label">Tags:</span>' +
       '<button type="button" class="tag-filter-btn" onclick="plannerApp.openTagColors()" title="Change tag colors">🎨</button>' +
-      '<button type="button" class="tag-filter-btn' + (!assignmentTagFilter?' active':'') +
+      '<button type="button" class="tag-filter-btn' + (!activeCount?' active':'') +
         '" onclick="plannerApp.setAssignmentTagFilter(null)">All</button>' +
       tags.map(function(t){
         var count = state.assignments.concat(state.exams).filter(function(a){ return (a.tags||[]).indexOf(t)!==-1; }).length;
-        var active = assignmentTagFilter===t;
+        var active = assignmentTagFilters.indexOf(t)!==-1;
         return '<button type="button" class="tag-filter-btn' + (active?' active':'') + '" style="' +
           (active ? 'background:' + tagColor(t) + '; color:#fff; border-color:' + tagColor(t) + ';'
                   : 'color:' + tagColor(t) + '; border-color:' + tagColor(t) + '55;') +
           '" onclick="plannerApp.setAssignmentTagFilter(\'' + t.replace(/'/g, "\\'") + '\')">' +
-          escapeHtml(t) + ' <span class="chip-count">' + count + '</span></button>';
-      }).join('');
+          (active?'✓ ':'') + escapeHtml(t) + ' <span class="chip-count">' + count + '</span></button>';
+      }).join('') +
+      (activeCount > 1 ? '<span class="tag-filter-note">matching all ' + activeCount + ' tags</span>' : '');
     var dl = document.getElementById('assignment-tags-datalist');
     if(dl) dl.innerHTML = tags.map(function(t){ return '<option value="' + escapeHtml(t) + '">'; }).join('');
   }
@@ -4177,10 +4276,6 @@
   // Sorts undated items last, and puts untimed items before timed ones on the same day.
   function assignmentTimeKey(a){
     return (a.dueDate || '9999-12-31') + 'T' + (a.dueTime || '00:00');
-  }
-  function assignmentDueLabel(a){
-    if(!a.dueDate) return '';
-    return formatNice(a.dueDate) + (a.dueTime ? ' · ' + formatTime(a.dueTime) : '');
   }
   function assignmentRowHtml(a, depth){
     depth = depth || 0;
@@ -4210,15 +4305,13 @@
         '<button class="icon-btn-sm" onclick="plannerApp.deleteAssignment(\'' + a.id + '\')" title="Delete">✕</button></div>';
     } else {
       var metaBits = [ c ? escapeHtml(c.name) : 'No course' ];
-      var due = assignmentDueLabel(a);
-      if(due) metaBits.push(due);
       row = '<div class="list-row ' + (a.completed?'completed':'') + (depth?' sub-assignment-row':'') + '">' +
         '<input type="checkbox" class="checkbox" ' + (a.completed?'checked':'') + ' onchange="plannerApp.toggleAssignment(\'' + a.id + '\')">' +
         courseIconOrDot(c, 10) +
         '<div class="list-row-body"><div class="list-row-title">' + escapeHtml(a.title) + '</div>' +
         '<div class="list-row-meta">' + metaBits.join(' · ') + subMeta + '</div>' +
         tagPillsHtml(a) + '</div>' +
-        '<span class="urgency-pill ' + (a.completed?'urgency-done':u.cls) + '">' + (a.completed?'Completed':u.text) + '</span>' +
+        '<span class="due-pill-group">' + duePillsHtml(a.dueDate, a.dueTime, a.completed) + '</span>' +
         '<button class="icon-btn-sm" onclick="plannerApp.startEditingAssignment(\'' + a.id + '\')" title="Edit">✎</button>' +
         addSubBtn +
         '<button class="icon-btn-sm" onclick="plannerApp.toggleAssignmentFiles(\'' + a.id + '\')" title="Attached files">📎' + (fileCount?(' '+fileCount):'') + '</button>' +
@@ -4366,8 +4459,9 @@
     if(assignmentFilter==='pending') list = list.filter(function(it){ return !it.ref.completed; });
     if(assignmentFilter==='completed') list = list.filter(function(it){ return !!it.ref.completed; });
     if(assignmentCourseFilter) list = list.filter(function(it){ return it.courseId===assignmentCourseFilter; });
-    if(assignmentTagFilter) list = list.filter(function(it){
-      return (it.ref.tags||[]).indexOf(assignmentTagFilter)!==-1;
+    if(assignmentTagFilters.length) list = list.filter(function(it){
+      var tags = it.ref.tags || [];
+      return assignmentTagFilters.every(function(t){ return tags.indexOf(t)!==-1; });
     });
 
     var box = document.getElementById('assignments-list');
@@ -4504,7 +4598,6 @@
     } else {
       var metaBits = [];
       if(c) metaBits.push(escapeHtml(c.name));
-      if(ex.date) metaBits.push(formatNice(ex.date) + (ex.time?' · '+formatTime(ex.time):''));
       if(ex.location) metaBits.push(escapeHtml(ex.location));
       row = '<div class="list-row ' + (ex.completed?'completed':'') + '">' +
         '<input type="checkbox" class="checkbox" ' + (ex.completed?'checked':'') + ' onchange="plannerApp.toggleExam(\'' + ex.id + '\')">' +
@@ -4512,7 +4605,7 @@
         '<div class="list-row-body"><div class="list-row-title">' + escapeHtml(ex.title) + ' <span class="tag-exam">Exam</span></div>' +
         '<div class="list-row-meta">' + metaBits.join(' · ') + subMeta + '</div>' +
         tagPillsHtml(ex) + '</div>' +
-        '<span class="urgency-pill ' + (ex.completed?'urgency-done':cls) + '">' + (ex.completed?'Completed':countdown) + '</span>' +
+        '<span class="due-pill-group">' + duePillsHtml(ex.date, ex.time, ex.completed) + '</span>' +
         '<button class="icon-btn-sm" onclick="plannerApp.startEditingExam(\'' + ex.id + '\')" title="Edit">✎</button>' +
         '<button class="icon-btn-sm" onclick="plannerApp.startAddSubAssignment(\'' + ex.id + '\')" title="Add a study step">⤵</button>' +
         '<button class="icon-btn-sm" onclick="plannerApp.toggleAssignmentFiles(\'' + ex.id + '\')" title="Attached files">📎' + (fileCount?(' '+fileCount):'') + '</button>' +
@@ -6222,7 +6315,7 @@
     return { accent:'#8B5CF6', bgColor:'#8B5CF6', gpa:null, profileName:'', profileSchool:'', profilePicture:'',
       brandIcon:'', brandImage:'', brandBg:'', weekStart:0, statsEnabled:null, moodEmojis:null, plannerTitle:'',
       darkMode:false, dashboardOrder:null, dashboardEnabled:null, dashboardSizes:null, sidebarCollapsed:false,
-      tagColors:null, lastSeenVersion:'', countdownDate:'', countdownLabel:'' };
+      tagColors:null, urgencyGlow:true, urgencyDays:3, lastSeenVersion:'', countdownDate:'', countdownLabel:'' };
   }
   // Brings older backups up to the current shape. Anything missing gets a sane default
   // rather than being left undefined, so old files keep working after upgrades.
@@ -6330,6 +6423,7 @@
         applyProfile();
         applySidebarCollapsed();
         updateVersionTag();
+        syncUrgencyControls();
         renderAll();
         markClean();
         showToast('Backup imported.');
@@ -6509,7 +6603,7 @@
   /* ============ init ============ */
   async function init(){
     state = { courses:[], assignments:[], exams:[], habits:[], events:[], textbooks:[], files:[], folders:[], moods:[], timerSessions:[], sharedSchedules:[], notesContent:'', notesTitle:'',
-      settings:{ accent:'#8B5CF6', bgColor:'#8B5CF6', gpa:null, profileName:'', profileSchool:'', profilePicture:'', brandIcon:'', brandImage:'', brandBg:'', weekStart:0, statsEnabled:null, moodEmojis:null, plannerTitle:'', darkMode:false, dashboardOrder:null, dashboardEnabled:null, dashboardSizes:null, sidebarCollapsed:false, tagColors:null, lastSeenVersion:'', countdownDate:'', countdownLabel:'' } };
+      settings:{ accent:'#8B5CF6', bgColor:'#8B5CF6', gpa:null, profileName:'', profileSchool:'', profilePicture:'', brandIcon:'', brandImage:'', brandBg:'', weekStart:0, statsEnabled:null, moodEmojis:null, plannerTitle:'', darkMode:false, dashboardOrder:null, dashboardEnabled:null, dashboardSizes:null, sidebarCollapsed:false, tagColors:null, urgencyGlow:true, urgencyDays:3, lastSeenVersion:'', countdownDate:'', countdownLabel:'' } };
 
     updateVersionTag();
     applyTheme(state.settings.accent);
@@ -6519,6 +6613,7 @@
     setupNav();
     setupProfilePopover();
     setupBrandPopover();
+    setupUrgencySettings();
     setupSidebarToggle();
     setupWidgetLayoutWatcher();
     setupAssignmentEditing();
