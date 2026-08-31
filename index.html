@@ -454,18 +454,37 @@
   .cmp-col-daynum{ font-size:12.5px; font-weight:800; }
   .cmp-col-body{ position:relative; background:var(--surface-soft); }
   .cmp-hline{ position:absolute; left:0; right:0; height:1px; background:var(--border); }
-  .cmp-block{ position:absolute; border-radius:5px; padding:3px 4px; overflow:hidden;
+  /* Opens from inside the Compare Schedules modal, so it must stack above it.
+     Both were z-index 600 and the later element in the DOM was winning the tie. */
+  #class-info-overlay{ z-index:680; }
+  .class-info-owner{ display:flex; align-items:center; gap:8px; font-size:12.5px; font-weight:700;
+    color:var(--ink-soft); padding-bottom:12px; margin-bottom:6px; border-bottom:1px solid var(--border); }
+  .class-info-row{ display:flex; justify-content:space-between; gap:16px; padding:9px 0;
+    border-bottom:1px solid var(--border); font-size:13px; }
+  .class-info-row:last-child{ border-bottom:none; }
+  .class-info-label{ color:var(--ink-soft); font-weight:700; flex-shrink:0; }
+  .class-info-value{ color:var(--ink); text-align:right; word-break:break-word; }
+  .cmp-block{ cursor:pointer; position:absolute; border-radius:5px; padding:3px 4px; overflow:hidden;
     box-shadow:0 1px 3px rgba(0,0,0,.18); }
+  .cmp-block:hover{ filter:brightness(1.12); box-shadow:0 2px 8px rgba(0,0,0,.28); }
+  .cmp-month-bar:hover{ filter:brightness(1.12); }
   .cmp-block-name{ font-size:9.5px; font-weight:700; color:#fff; line-height:1.25;
     display:block; overflow:hidden; text-overflow:ellipsis; }
 
   /* Month: solid per-person bars instead of loose dots */
   .cmp-month-bars{ display:flex; flex-direction:column; gap:2px; }
-  .cmp-month-bar{ font-size:9px; font-weight:700; color:#fff; border-radius:3px; padding:1px 4px;
+  .cmp-month-bar{ cursor:pointer; font-size:9px; font-weight:700; color:#fff; border-radius:3px; padding:1px 4px;
     overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .compare-month-cell.is-today{ border-color:var(--accent); box-shadow:0 0 0 1.5px var(--accent-soft); }
   .compare-person-chip{ display:inline-flex; align-items:center; gap:7px; border-radius:999px;
-    padding:5px 6px 5px 12px; font-size:12.5px; font-weight:600; border:1.5px solid var(--border); background:var(--surface-soft); }
+    padding:5px 6px 5px 12px; font-size:12.5px; font-weight:600; border:1.5px solid var(--border);
+    background:var(--surface-soft); cursor:pointer; user-select:none;
+    transition:opacity .15s ease, background .15s ease, border-color .15s ease; }
+  .compare-person-chip:hover{ border-color:var(--accent); }
+  /* Toggled off: darkened, faded, and struck through so it reads as "not shown". */
+  .compare-person-chip.is-off{ opacity:.5; background:rgba(0,0,0,.16); border-style:dashed;
+    color:var(--ink-soft); text-decoration:line-through; }
+  .compare-person-chip.is-off .compare-person-swatch{ filter:grayscale(1); }
   .compare-person-swatch{ width:9px; height:9px; border-radius:50%; flex-shrink:0; }
   .compare-grid{ display:grid; grid-template-columns:58px repeat(var(--compare-cols,7), 1fr); gap:1px;
     background:var(--border); border:1px solid var(--border); border-radius:10px; overflow:hidden; margin-top:12px; }
@@ -547,6 +566,12 @@
   .version-tag{ font-size:10.5px; color:var(--ink-faint); padding:2px 13px 12px; letter-spacing:.02em;
     background:none; border:none; cursor:pointer; text-align:left; font-family:var(--font-body); display:block; width:100%; transition:color .15s ease; }
   .version-tag:hover{ color:var(--accent-dark); text-decoration:underline; }
+  .version-dot{ display:none; width:7px; height:7px; border-radius:50%; background:var(--accent);
+    margin-left:6px; vertical-align:middle; box-shadow:0 0 0 3px var(--accent-soft);
+    animation:versionPulse 2s ease-in-out infinite; }
+  .version-tag.has-update .version-dot{ display:inline-block; }
+  .version-tag.has-update{ color:var(--accent-dark); font-weight:700; }
+  @keyframes versionPulse{ 0%,100%{ opacity:1; } 50%{ opacity:.45; } }
 
   /* ---------- Changelog modal ---------- */
   .changelog-overlay{ position:fixed; inset:0; z-index:600; display:flex; align-items:center; justify-content:center;
@@ -1505,6 +1530,16 @@
   </div>
 </div>
 
+<div class="changelog-overlay hidden" id="class-info-overlay">
+  <div class="changelog-card" style="width:min(400px,100%);">
+    <div class="changelog-header">
+      <h3 id="class-info-title">Class</h3>
+      <button type="button" class="icon-btn-sm" id="class-info-close-btn" title="Close">✕</button>
+    </div>
+    <div class="changelog-body"><div id="class-info-body"></div></div>
+  </div>
+</div>
+
 <div class="changelog-overlay hidden" id="tag-colors-overlay">
   <div class="changelog-card">
     <div class="changelog-header">
@@ -2027,7 +2062,7 @@
 
   /* ============ state ============ */
   var state = { courses:[], assignments:[], exams:[], habits:[], events:[], textbooks:[], files:[], folders:[], moods:[], timerSessions:[], sharedSchedules:[], notesContent:'', notesTitle:'',
-    settings:{ accent:'#8B5CF6', bgColor:'#8B5CF6', gpa:null, profileName:'', profileSchool:'', profilePicture:'', brandIcon:'', brandImage:'', brandBg:'', weekStart:0, statsEnabled:null, moodEmojis:null, plannerTitle:'', darkMode:false, dashboardOrder:null, dashboardEnabled:null, dashboardSizes:null, sidebarCollapsed:false, tagColors:null, countdownDate:'', countdownLabel:'' } };
+    settings:{ accent:'#8B5CF6', bgColor:'#8B5CF6', gpa:null, profileName:'', profileSchool:'', profilePicture:'', brandIcon:'', brandImage:'', brandBg:'', weekStart:0, statsEnabled:null, moodEmojis:null, plannerTitle:'', darkMode:false, dashboardOrder:null, dashboardEnabled:null, dashboardSizes:null, sidebarCollapsed:false, tagColors:null, lastSeenVersion:'', countdownDate:'', countdownLabel:'' } };
   var assignmentFilter = 'all';
   var assignmentCourseFilter = null;
   var expandedCourseIds = {};
@@ -2078,8 +2113,15 @@
   var ALLOWED_FILE_TYPES = ['application/pdf','image/png','image/jpeg','image/gif','image/webp','text/plain','application/msword','application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
   var ALLOWED_FILE_EXTENSIONS = ['.pdf','.png','.jpg','.jpeg','.gif','.webp','.txt','.doc','.docx'];
   var MAX_FILE_SIZE = 8 * 1024 * 1024;
-  var APP_VERSION = '1.09.4';
+  var APP_VERSION = '1.10';
   var CHANGELOG = [
+    { version:'1.10', date:'', notes:[
+      'Exams can now be checked off like assignments.',
+      'Fixed: class chips at the top of the Assignments tab ignored exams, so a class with one assignment and one exam showed 0/1 instead of 0/2.',
+      'A dot now appears next to "What\'s new" when there is an update you have not read yet; opening it clears the dot.',
+      'Compare Schedules: click any class block — yours or a friend\'s — to see its meeting days, times, location, instructor, and term dates.',
+      'Compare Schedules: click a name to hide or show that person without removing their schedule.'
+    ]},
     { version:'1.09.4', date:'', notes:[
       'Study Timer: the Focus and Break inputs now line up instead of sitting at different heights.',
       'Dashboard drag handles are always visible rather than only appearing on hover.',
@@ -3300,7 +3342,8 @@
       exportedAt: new Date().toISOString(),
       classes: state.courses.map(function(c){
         return { name:c.name, day:c.day||'', startTime:c.startTime||'', endTime:c.endTime||'',
-                 location:c.location||'', startDate:c.startDate||'', endDate:c.endDate||'' };
+                 location:c.location||'', startDate:c.startDate||'', endDate:c.endDate||'',
+                 instructor:c.instructor||'' };
       })
     };
     var blob = new Blob([JSON.stringify(payload, null, 2)], { type:'application/json' });
@@ -3332,7 +3375,8 @@
         id: uid(), name: nameGuess, color: color, importedAt: new Date().toISOString(),
         classes: data.classes.map(function(c){
           return { name:c.name||'Class', day:c.day||'', startTime:c.startTime||'', endTime:c.endTime||'',
-                   location:c.location||'', startDate:c.startDate||'', endDate:c.endDate||'' };
+                   location:c.location||'', startDate:c.startDate||'', endDate:c.endDate||'',
+                   instructor:c.instructor||'' };
         })
       });
       saveKey('kenna-shared-schedules', state.sharedSchedules);
@@ -3360,7 +3404,8 @@
     var me = { id:'__me__', name:'You', color:'var(--accent)', rawColor:'#8B5CF6',
       classes: state.courses.map(function(c){
         return { name:c.name, day:c.day||'', startTime:c.startTime||'', endTime:c.endTime||'',
-                 location:c.location||'', startDate:c.startDate||'', endDate:c.endDate||'' };
+                 location:c.location||'', startDate:c.startDate||'', endDate:c.endDate||'',
+                 instructor:c.instructor||'' };
       }) };
     return [me].concat(state.sharedSchedules.map(function(s){
       return { id:s.id, name:s.name, color:s.color, rawColor:s.color, classes:s.classes };
@@ -3433,10 +3478,11 @@
           // Each person gets their own vertical lane so blocks sit side by side, never stacked.
           var leftPct = (pi / n) * 100;
           var widthPct = (1 / n) * 100;
-          blocks += '<div class="cmp-block" style="top:' + top.toFixed(1) + 'px; height:' + hgt.toFixed(1) + 'px; left:' +
+          var ci = p.classes.indexOf(cls);
+          blocks += '<div class="cmp-block" onclick="plannerApp.showCompareClassInfo(' + pi + ',' + ci + ')" ' +
+            'style="top:' + top.toFixed(1) + 'px; height:' + hgt.toFixed(1) + 'px; left:' +
             leftPct.toFixed(2) + '%; width:calc(' + widthPct.toFixed(2) + '% - 2px); background:' + p.rawColor + ';" title="' +
-            escapeHtml(p.name + ' · ' + cls.name + ' · ' + (cls.startTime?formatTime(cls.startTime):'') +
-              (cls.endTime?'–'+formatTime(cls.endTime):'') + (cls.location?' · '+cls.location:'')) + '">' +
+            escapeHtml(p.name + ' · ' + cls.name + ' — click for details') + '">' +
             '<span class="cmp-block-name">' + escapeHtml(cls.name) + '</span></div>';
         });
       });
@@ -3466,13 +3512,15 @@
     for(var day=1; day<=daysInMonth; day++){
       var iso = year + '-' + String(month+1).padStart(2,'0') + '-' + String(day).padStart(2,'0');
       var bars = '';
-      participants.forEach(function(p){
+      participants.forEach(function(p, pi){
         var todays = p.classes.filter(function(cls){ return sharedClassMeetsOn(cls, iso); });
         if(!todays.length) return;
-        // One solid bar per person per day, labelled with how many classes they have.
-        bars += '<div class="cmp-month-bar" style="background:' + p.rawColor + '" title="' +
-          escapeHtml(p.name + ': ' + todays.map(function(c){ return c.name; }).join(', ')) + '">' +
-          escapeHtml(p.name) + ' · ' + todays.length + '</div>';
+        todays.forEach(function(cls){
+          var ci = p.classes.indexOf(cls);
+          bars += '<div class="cmp-month-bar" onclick="plannerApp.showCompareClassInfo(' + pi + ',' + ci + ')" ' +
+            'style="background:' + p.rawColor + '" title="' + escapeHtml(p.name + ' · ' + cls.name + ' — click for details') + '">' +
+            escapeHtml(cls.name) + '</div>';
+        });
       });
       html += '<div class="compare-month-cell' + (iso===todayIso?' is-today':'') + '">' +
         '<div class="compare-month-daynum">' + day + '</div>' +
@@ -3481,22 +3529,42 @@
     html += '</div>';
     return html;
   }
+  var compareCache = [];
+  var compareHidden = {};   // participant id -> true when toggled off
+  function toggleComparePerson(id){
+    if(compareHidden[id]) delete compareHidden[id];
+    else compareHidden[id] = true;
+    renderCompareSchedules();
+  }
   function renderCompareSchedules(){
     var chipRow = document.getElementById('imported-schedules-row');
     if(!chipRow) return;
     if(!compareAnchor) resetCompareAnchor();
-    chipRow.innerHTML = state.sharedSchedules.length ? state.sharedSchedules.map(function(s){
-      return '<span class="compare-person-chip">' +
-        '<span class="compare-person-swatch" style="background:' + s.color + '"></span>' +
-        escapeHtml(s.name) +
-        '<button class="icon-btn-sm" onclick="plannerApp.removeSharedSchedule(\'' + s.id + '\')" title="Remove">✕</button></span>';
-    }).join('') + '<span style="font-size:11.5px; color:var(--ink-faint); align-self:center;">' +
-      state.sharedSchedules.length + '/' + MAX_SHARED_SCHEDULES + ' imported</span>' : '';
+    var everyone = compareParticipants();
+    chipRow.innerHTML = everyone.map(function(p){
+      var off = !!compareHidden[p.id];
+      var isMe = p.id==='__me__';
+      var removeBtn = isMe ? '' :
+        '<button class="icon-btn-sm" onclick="event.stopPropagation();plannerApp.removeSharedSchedule(\'' + p.id + '\')" title="Remove">✕</button>';
+      return '<span class="compare-person-chip' + (off?' is-off':'') + '" ' +
+        'onclick="plannerApp.toggleComparePerson(\'' + p.id + '\')" ' +
+        'title="' + (off?'Show ':'Hide ') + escapeHtml(isMe?'your classes':p.name + "'s classes") + '">' +
+        '<span class="compare-person-swatch" style="background:' + p.rawColor + '"></span>' +
+        escapeHtml(p.name) + removeBtn + '</span>';
+    }).join('') +
+      '<span style="font-size:11.5px; color:var(--ink-faint); align-self:center;">' +
+      state.sharedSchedules.length + '/' + MAX_SHARED_SCHEDULES + ' imported · click a name to hide</span>';
 
-    var participants = compareParticipants();
+    // Only visible people are drawn, and the cache must match so class clicks map correctly.
+    var participants = everyone.filter(function(p){ return !compareHidden[p.id]; });
+    compareCache = participants;
     var wrap = document.getElementById('compare-grid-wrap');
     if(!state.courses.length && !state.sharedSchedules.length){
       wrap.innerHTML = emptyState('Add your courses, then import a friend\'s schedule to compare.');
+      return;
+    }
+    if(!participants.length){
+      wrap.innerHTML = emptyState('Everyone is hidden — click a name above to show them again.');
       return;
     }
     var gridHtml = compareViewMode==='month' ? renderCompareMonth(participants) : renderCompareWeek(participants);
@@ -3504,6 +3572,56 @@
       return '<span><span class="compare-person-swatch" style="background:' + p.rawColor + '"></span>' + escapeHtml(p.name) + '</span>';
     }).join('') + '</div>';
     wrap.innerHTML = gridHtml + legend;
+  }
+  function classInfoRow(label, value){
+    if(!value) return '';
+    return '<div class="class-info-row"><span class="class-info-label">' + escapeHtml(label) + '</span>' +
+      '<span class="class-info-value">' + escapeHtml(value) + '</span></div>';
+  }
+  function dayNamesFrom(dayStr){
+    var days = parseCourseDays(dayStr);
+    if(!days.length) return dayStr || '';
+    var full = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+    return days.map(function(d){ return full[d]; }).join(', ');
+  }
+  // Shows schedule details only — no files, notes, or important dates.
+  function showCompareClassInfo(pIdx, cIdx){
+    var p = compareCache[pIdx];
+    if(!p) return;
+    var cls = p.classes[cIdx];
+    if(!cls) return;
+    document.getElementById('class-info-title').textContent = cls.name || 'Class';
+    var timeStr = '';
+    if(cls.startTime && cls.endTime) timeStr = formatTime(cls.startTime) + ' – ' + formatTime(cls.endTime);
+    else if(cls.startTime) timeStr = formatTime(cls.startTime);
+    var term = '';
+    if(cls.startDate && cls.endDate) term = formatNice(cls.startDate) + ' – ' + formatNice(cls.endDate);
+    else if(cls.startDate) term = 'From ' + formatNice(cls.startDate);
+    else if(cls.endDate) term = 'Until ' + formatNice(cls.endDate);
+
+    var rows = '<div class="class-info-owner"><span class="compare-person-swatch" style="background:' + p.rawColor + '"></span>' +
+      escapeHtml(p.id==='__me__' ? 'Your class' : p.name + "'s class") + '</div>' +
+      classInfoRow('Meets', dayNamesFrom(cls.day)) +
+      classInfoRow('Time', timeStr) +
+      classInfoRow('Location', cls.location) +
+      classInfoRow('Instructor', cls.instructor) +
+      classInfoRow('Term', term);
+    if(!timeStr && !cls.location && !cls.instructor && !term && !cls.day){
+      rows += '<div class="empty-state" style="padding:10px 0;">No schedule details were shared for this class.</div>';
+    }
+    document.getElementById('class-info-body').innerHTML = rows;
+    document.getElementById('class-info-overlay').classList.remove('hidden');
+  }
+  function closeClassInfo(){
+    document.getElementById('class-info-overlay').classList.add('hidden');
+  }
+  function setupClassInfo(){
+    document.getElementById('class-info-close-btn').addEventListener('click', closeClassInfo);
+    var overlay = document.getElementById('class-info-overlay');
+    overlay.addEventListener('click', function(e){ if(e.target===overlay) closeClassInfo(); });
+    document.addEventListener('keydown', function(e){
+      if(e.key==='Escape' && !overlay.classList.contains('hidden')) closeClassInfo();
+    });
   }
   function setCompareViewMode(mode){
     compareViewMode = mode;
@@ -3543,7 +3661,11 @@
     var overlay = document.getElementById('compare-overlay');
     overlay.addEventListener('click', function(e){ if(e.target===overlay) closeCompareModal(); });
     document.addEventListener('keydown', function(e){
-      if(e.key==='Escape' && !overlay.classList.contains('hidden')) closeCompareModal();
+      if(e.key!=='Escape' || overlay.classList.contains('hidden')) return;
+      // The class-info panel opens on top of this one, so let it take Escape first.
+      var info = document.getElementById('class-info-overlay');
+      if(info && !info.classList.contains('hidden')) return;
+      closeCompareModal();
     });
     document.getElementById('schedule-export-btn').addEventListener('click', exportSchedule);
     document.getElementById('schedule-import-input').addEventListener('change', function(ev){
@@ -4241,13 +4363,8 @@
     var list = unifiedItems();
     if(assignmentTypeFilter==='assignments') list = list.filter(function(it){ return it.kind==='assignment'; });
     if(assignmentTypeFilter==='exams') list = list.filter(function(it){ return it.kind==='exam'; });
-    // Exams have no checkbox, so "done" for an exam simply means the date has passed.
-    if(assignmentFilter==='pending') list = list.filter(function(it){
-      return it.kind==='exam' ? (!it.date || daysBetween(it.date) >= 0) : !it.ref.completed;
-    });
-    if(assignmentFilter==='completed') list = list.filter(function(it){
-      return it.kind==='exam' ? (it.date && daysBetween(it.date) < 0) : !!it.ref.completed;
-    });
+    if(assignmentFilter==='pending') list = list.filter(function(it){ return !it.ref.completed; });
+    if(assignmentFilter==='completed') list = list.filter(function(it){ return !!it.ref.completed; });
     if(assignmentCourseFilter) list = list.filter(function(it){ return it.courseId===assignmentCourseFilter; });
     if(assignmentTagFilter) list = list.filter(function(it){
       return (it.ref.tags||[]).indexOf(assignmentTagFilter)!==-1;
@@ -4294,11 +4411,13 @@
   function renderAssignmentChips(){
     var row = document.getElementById('assignment-chip-row');
     if(!row) return;
-    var allDone = state.assignments.filter(function(a){ return a.completed; }).length;
-    var html = '<button type="button" class="course-chip ' + (!assignmentCourseFilter?'active':'') + '" onclick="plannerApp.setAssignmentCourseFilter(null)">All <span class="chip-count">' + allDone + '/' + state.assignments.length + '</span></button>';
+    // Counts come from the same unified list the tab renders, so exams are included.
+    var all = unifiedItems();
+    var allDone = all.filter(function(it){ return it.ref.completed; }).length;
+    var html = '<button type="button" class="course-chip ' + (!assignmentCourseFilter?'active':'') + '" onclick="plannerApp.setAssignmentCourseFilter(null)">All <span class="chip-count">' + allDone + '/' + all.length + '</span></button>';
     html += state.courses.map(function(c){
-      var list = state.assignments.filter(function(a){ return a.courseId===c.id; });
-      var done = list.filter(function(a){ return a.completed; }).length;
+      var list = all.filter(function(it){ return it.courseId===c.id; });
+      var done = list.filter(function(it){ return it.ref.completed; }).length;
       return '<button type="button" class="course-chip ' + (assignmentCourseFilter===c.id?'active':'') + '" onclick="plannerApp.setAssignmentCourseFilter(\'' + c.id + '\')">' +
         '<span class="chip-dot" style="background:' + c.color + '"></span>' + escapeHtml(c.name) + ' <span class="chip-count">' + done + '/' + list.length + '</span></button>';
     }).join('');
@@ -4387,11 +4506,13 @@
       if(c) metaBits.push(escapeHtml(c.name));
       if(ex.date) metaBits.push(formatNice(ex.date) + (ex.time?' · '+formatTime(ex.time):''));
       if(ex.location) metaBits.push(escapeHtml(ex.location));
-      row = '<div class="list-row">' + courseIconOrDot(c, 10, 'var(--amber)') +
+      row = '<div class="list-row ' + (ex.completed?'completed':'') + '">' +
+        '<input type="checkbox" class="checkbox" ' + (ex.completed?'checked':'') + ' onchange="plannerApp.toggleExam(\'' + ex.id + '\')">' +
+        courseIconOrDot(c, 10, 'var(--amber)') +
         '<div class="list-row-body"><div class="list-row-title">' + escapeHtml(ex.title) + ' <span class="tag-exam">Exam</span></div>' +
         '<div class="list-row-meta">' + metaBits.join(' · ') + subMeta + '</div>' +
         tagPillsHtml(ex) + '</div>' +
-        '<span class="urgency-pill ' + cls + '">' + countdown + '</span>' +
+        '<span class="urgency-pill ' + (ex.completed?'urgency-done':cls) + '">' + (ex.completed?'Completed':countdown) + '</span>' +
         '<button class="icon-btn-sm" onclick="plannerApp.startEditingExam(\'' + ex.id + '\')" title="Edit">✎</button>' +
         '<button class="icon-btn-sm" onclick="plannerApp.startAddSubAssignment(\'' + ex.id + '\')" title="Add a study step">⤵</button>' +
         '<button class="icon-btn-sm" onclick="plannerApp.toggleAssignmentFiles(\'' + ex.id + '\')" title="Attached files">📎' + (fileCount?(' '+fileCount):'') + '</button>' +
@@ -4418,6 +4539,13 @@
       row += '<div class="sub-assignment-list">' + kids.map(function(k){ return assignmentRowHtml(k, 1); }).join('') + '</div>';
     }
     return row;
+  }
+  function toggleExam(id){
+    var ex = state.exams.find(function(x){ return x.id===id; });
+    if(!ex) return;
+    ex.completed = !ex.completed;
+    saveKey('kenna-exams', state.exams);
+    renderAssignments(); renderDashboard(); renderCalendar();
   }
   function startEditingExam(id){ editingExamId = id; renderAssignments(); }
   function stopEditingExam(){
@@ -6029,7 +6157,7 @@
       var location = document.getElementById('exam-location-input').value.trim();
       if(!title) return;
       var examTags = parseTagInput(document.getElementById('exam-tags-input').value);
-      state.exams.push({ id:uid(), title:title, courseId:courseId, date:date, time:time, location:location, tags:examTags });
+      state.exams.push({ id:uid(), title:title, courseId:courseId, date:date, time:time, location:location, tags:examTags, completed:false });
       saveKey('kenna-exams', state.exams);
       e.target.reset();
       document.getElementById('exam-form').classList.add('hidden');
@@ -6094,7 +6222,7 @@
     return { accent:'#8B5CF6', bgColor:'#8B5CF6', gpa:null, profileName:'', profileSchool:'', profilePicture:'',
       brandIcon:'', brandImage:'', brandBg:'', weekStart:0, statsEnabled:null, moodEmojis:null, plannerTitle:'',
       darkMode:false, dashboardOrder:null, dashboardEnabled:null, dashboardSizes:null, sidebarCollapsed:false,
-      tagColors:null, countdownDate:'', countdownLabel:'' };
+      tagColors:null, lastSeenVersion:'', countdownDate:'', countdownLabel:'' };
   }
   // Brings older backups up to the current shape. Anything missing gets a sane default
   // rather than being left undefined, so old files keep working after upgrades.
@@ -6125,6 +6253,7 @@
       assignments: assignments,
       exams: (Array.isArray(data.exams) ? data.exams : []).map(function(e){
         if(!Array.isArray(e.tags)) e.tags = [];
+        if(e.completed===undefined) e.completed = false;
         return e;
       }),
       habits: (Array.isArray(data.habits) ? data.habits : []).map(function(h){ h.checkins = h.checkins || {}; return h; }),
@@ -6200,6 +6329,7 @@
         applyBackground(state.settings.bgColor || '#8B5CF6');
         applyProfile();
         applySidebarCollapsed();
+        updateVersionTag();
         renderAll();
         markClean();
         showToast('Backup imported.');
@@ -6275,9 +6405,23 @@
       '</div>';
     }).join('');
   }
+  function updateVersionTag(){
+    var tag = document.getElementById('version-tag');
+    if(!tag) return;
+    var unseen = state.settings.lastSeenVersion !== APP_VERSION;
+    tag.innerHTML = 'v' + APP_VERSION + ' · What\'s new<span class="version-dot"></span>';
+    tag.classList.toggle('has-update', unseen);
+    tag.title = unseen ? "There's a new update — see what changed" : "See what's new";
+  }
   function openChangelog(){
     renderChangelog();
     document.getElementById('changelog-overlay').classList.remove('hidden');
+    // Seeing the notes clears the dot until the next release.
+    if(state.settings.lastSeenVersion !== APP_VERSION){
+      state.settings.lastSeenVersion = APP_VERSION;
+      saveKey('kenna-settings', state.settings);
+      updateVersionTag();
+    }
   }
   function closeChangelog(){
     document.getElementById('changelog-overlay').classList.add('hidden');
@@ -6365,9 +6509,9 @@
   /* ============ init ============ */
   async function init(){
     state = { courses:[], assignments:[], exams:[], habits:[], events:[], textbooks:[], files:[], folders:[], moods:[], timerSessions:[], sharedSchedules:[], notesContent:'', notesTitle:'',
-      settings:{ accent:'#8B5CF6', bgColor:'#8B5CF6', gpa:null, profileName:'', profileSchool:'', profilePicture:'', brandIcon:'', brandImage:'', brandBg:'', weekStart:0, statsEnabled:null, moodEmojis:null, plannerTitle:'', darkMode:false, dashboardOrder:null, dashboardEnabled:null, dashboardSizes:null, sidebarCollapsed:false, tagColors:null, countdownDate:'', countdownLabel:'' } };
+      settings:{ accent:'#8B5CF6', bgColor:'#8B5CF6', gpa:null, profileName:'', profileSchool:'', profilePicture:'', brandIcon:'', brandImage:'', brandBg:'', weekStart:0, statsEnabled:null, moodEmojis:null, plannerTitle:'', darkMode:false, dashboardOrder:null, dashboardEnabled:null, dashboardSizes:null, sidebarCollapsed:false, tagColors:null, lastSeenVersion:'', countdownDate:'', countdownLabel:'' } };
 
-    document.getElementById('version-tag').textContent = 'v' + APP_VERSION + ' · What\'s new';
+    updateVersionTag();
     applyTheme(state.settings.accent);
     applyBackground(state.settings.bgColor);
     applyProfile();
@@ -6404,6 +6548,7 @@
     setupFullscreen();
     setupChangelog();
     setupCompareSchedules();
+    setupClassInfo();
     setupStatsCustomize();
     setupMoodCustomize();
     reparentOrphanAssignments();
@@ -6444,7 +6589,10 @@
     openStatsCustomize: openStatsCustomize,
     setAssignmentTagFilter: setAssignmentTagFilter,
     openTagColors: openTagColors,
+    showCompareClassInfo: showCompareClassInfo,
+    toggleComparePerson: toggleComparePerson,
     startEditingAssignment: startEditingAssignment,
+    toggleExam: toggleExam,
     startEditingExam: startEditingExam,
     stopEditingExam: stopEditingExam,
     handleExamFileInputChange: handleExamFileInputChange,
