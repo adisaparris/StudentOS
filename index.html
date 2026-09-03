@@ -817,6 +817,7 @@
   .dark-mode-toggle-row input[type=checkbox]:checked::after{ left:18px; }
 
   /* ---------- This Week ---------- */
+  #date-range-select.active{ border-color:var(--accent); color:var(--accent-dark); font-weight:700; }
   .week-label{ font-size:12.5px; color:var(--ink-soft); font-weight:600; margin-bottom:12px; }
   .week-label.hidden{ display:none; }
   .add-btn.active{ background:var(--accent); color:#fff; }
@@ -1241,7 +1242,14 @@
       <div class="toolbar">
         <div class="toolbar-left"><h2>Assignments &amp; Exams</h2><p>Everything due, in one place.</p></div>
         <div class="toolbar-right">
-          <button class="add-btn" id="week-toggle-btn">📅 This Week</button>
+          <select id="date-range-select" class="field" title="Limit the list to a date range">
+            <option value="none">📅 All dates</option>
+            <option value="week">This week</option>
+            <option value="next7">Next 7 days</option>
+            <option value="next14">Next 14 days</option>
+            <option value="next30">Next 30 days</option>
+            <option value="overdue">Overdue only</option>
+          </select>
           <button class="add-btn" id="assignment-sort-btn" title="Group by class, then due date & time">⇅ Sort</button>
           <div class="urgency-settings-wrap">
             <button class="add-btn" id="urgency-settings-btn" title="Due date urgency highlighting">⚡ Urgency</button>
@@ -1685,6 +1693,31 @@
     return hh + ':' + String(mi).padStart(2,'0') + ' ' + ap;
   }
   function emptyState(msg){ return '<div class="empty-state">' + escapeHtml(msg) + '</div>'; }
+  // Resolves the Assignments tab's date-range dropdown into a start/end window.
+  function getDateRange(mode){
+    var today = todayISO();
+    function plusDays(n){
+      var d = parseISO(today); d.setDate(d.getDate()+n); return isoFromDateObj(d);
+    }
+    function shortLabel(iso){ return parseISO(iso).toLocaleDateString('en-US',{month:'short', day:'numeric'}); }
+    if(mode==='week'){
+      var w = getCurrentWeekRange();
+      return { startIso:w.startIso, endIso:w.endIso, label:'this week · ' + w.label,
+               empty:'Nothing due this week — enjoy it.' };
+    }
+    if(mode==='next7' || mode==='next14' || mode==='next30'){
+      var n = mode==='next7' ? 7 : (mode==='next14' ? 14 : 30);
+      var end = plusDays(n);
+      return { startIso:today, endIso:end, label:'the next ' + n + ' days · ' + shortLabel(today) + ' – ' + shortLabel(end),
+               empty:'Nothing due in the next ' + n + ' days.' };
+    }
+    if(mode==='overdue'){
+      var yesterday = plusDays(-1);
+      return { startIso:'0000-01-01', endIso:yesterday, label:'overdue items', overdueOnly:true,
+               empty:'Nothing overdue — nicely done.' };
+    }
+    return null;
+  }
   function getCurrentWeekRange(){
     var now = new Date();
     var base = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -2099,7 +2132,7 @@
   var expandedCourseIds = {};
   var courseViewMode = 'detailed';
   var assignmentFilesOpenId = null;
-  var showThisWeekView = false;
+  var dateRangeMode = 'none';   // none | week | next7 | next14 | next30 | overdue
   var activeFolderId = null;
   var compareViewMode = 'week';
   var compareAnchor = null;      // ISO date the compare week view is centred on
@@ -2144,8 +2177,12 @@
   var ALLOWED_FILE_TYPES = ['application/pdf','image/png','image/jpeg','image/gif','image/webp','text/plain','application/msword','application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
   var ALLOWED_FILE_EXTENSIONS = ['.pdf','.png','.jpg','.jpeg','.gif','.webp','.txt','.doc','.docx'];
   var MAX_FILE_SIZE = 8 * 1024 * 1024;
-  var APP_VERSION = '1.10.1';
+  var APP_VERSION = '1.10.2';
   var CHANGELOG = [
+    { version:'1.10.2', date:'', notes:[
+      'The "This Week" button is now a date range dropdown with This week, Next 7 days, Next 14 days, Next 30 days, and Overdue only.',
+      'Ranged views group by class and include exams, and the header tells you exactly which dates you are looking at.'
+    ]},
     { version:'1.10.1', date:'', notes:[
       'Assignments and exams now use the same two-pill layout: the due date, then the countdown side by side.',
       'Upcoming due dates can glow orange (then red as they get closer). Toggle it and set the warning window from the Urgency button in the Assignments tab — 3 days by default.',
@@ -4418,12 +4455,15 @@
     assignmentFilesOpenId = (assignmentFilesOpenId===id) ? null : id;
     renderAssignments();
   }
-  function renderThisWeekView(){
-    var range = getCurrentWeekRange();
+  function renderDateRangeView(){
+    var range = getDateRange(dateRangeMode);
     var weekLabelEl = document.getElementById('assignments-week-label');
     weekLabelEl.textContent = 'Showing ' + range.label;
     weekLabelEl.classList.remove('hidden');
     var weekItems = unifiedItems().filter(function(it){
+      if(!it.date) return false;
+      // Completed work shouldn't clutter an "overdue" view.
+      if(range.overdueOnly && it.ref.completed) return false;
       return it.date >= range.startIso && it.date <= range.endIso;
     });
     var html = '';
@@ -4439,15 +4479,15 @@
     if(noCourse.length){
       html += courseGroupHeadingHtml(null, noCourse.length) + noCourse.map(itemHtml).join('');
     }
-    document.getElementById('assignments-list').innerHTML = html || emptyState('Nothing due this week — enjoy it.');
+    document.getElementById('assignments-list').innerHTML = html || emptyState(range.empty);
     renderAssignmentTagFilters();
   }
   function renderAssignments(){
     var chipRow = document.getElementById('assignment-chip-row');
     var weekLabelEl = document.getElementById('assignments-week-label');
-    if(showThisWeekView){
+    if(dateRangeMode !== 'none'){
       if(chipRow) chipRow.style.display = 'none';
-      renderThisWeekView();
+      renderDateRangeView();
       return;
     }
     if(chipRow) chipRow.style.display = '';
@@ -6540,9 +6580,9 @@
       document.getElementById('assignment-sort-btn').classList.toggle('active', assignmentSortByClass);
       renderAssignments();
     });
-    document.getElementById('week-toggle-btn').addEventListener('click', function(){
-      showThisWeekView = !showThisWeekView;
-      document.getElementById('week-toggle-btn').classList.toggle('active', showThisWeekView);
+    document.getElementById('date-range-select').addEventListener('change', function(ev){
+      dateRangeMode = ev.target.value;
+      ev.target.classList.toggle('active', dateRangeMode !== 'none');
       renderAssignments();
     });
   }
